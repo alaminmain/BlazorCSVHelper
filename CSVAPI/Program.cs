@@ -1,5 +1,6 @@
 using CSVAPI.Database;
 using CSVAPI.Entities;
+using CSVAPI.Services;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -19,12 +20,20 @@ using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     dbContext.Database.Migrate();
+    //if (!dbContext.Persons.Any())
+    //{
+    //    var mockData = MockDataGenerator.GenerateMockPersons(500000); // Generate 50 mock persons
+    //    dbContext.Persons.AddRange(mockData);
+    //    dbContext.SaveChanges();
+    //}
 }
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
+
+   
 }
 
 app.UseHttpsRedirection();
