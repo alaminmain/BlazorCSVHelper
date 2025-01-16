@@ -2,6 +2,7 @@ using CSVAPI.Database;
 using CSVAPI.Entities;
 using CSVAPI.Services;
 using Microsoft.EntityFrameworkCore;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -33,7 +34,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 
-   
+
 }
 
 app.UseHttpsRedirection();
@@ -87,6 +88,16 @@ app.MapDelete("/persons/{id}", async (int id, ApplicationDbContext dbContext) =>
     dbContext.Persons.Remove(person);
     await dbContext.SaveChangesAsync();
     return Results.NoContent();
+});
+
+
+app.MapGet("/generate-csv", async (ApplicationDbContext dbContext) =>
+{
+
+    var data = await dbContext.Persons.ToListAsync();
+    var csvContent = CSVGenerate.CreateCsv(data);
+    var bytes = Encoding.UTF8.GetBytes(csvContent);
+    return Results.File(bytes, "text/csv", "data.csv");
 });
 
 app.Run();

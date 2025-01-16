@@ -6,9 +6,14 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents()
     .AddInteractiveWebAssemblyComponents();
+var baseAddress = builder.Configuration["BaseAddress"];
+if (string.IsNullOrEmpty(baseAddress))
+{
+    throw new ArgumentNullException(nameof(baseAddress), "BaseAddress configuration is missing or empty.");
+}
+builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(baseAddress) });
 
 var app = builder.Build();
-
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {

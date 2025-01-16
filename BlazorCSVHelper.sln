@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BlazorCSVHelper.Client", "B
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CSVAPI", "CSVAPI\CSVAPI.csproj", "{5DCE7EFD-525B-469A-BA3D-BEF26BBC6D33}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BlazorCSVHelper.Shared", "BlazorCSVHelper.Shared\BlazorCSVHelper.Shared.csproj", "{18F645A1-1645-4885-9B53-AA048BE7EAF6}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -27,6 +29,10 @@ Global
 		{5DCE7EFD-525B-469A-BA3D-BEF26BBC6D33}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{5DCE7EFD-525B-469A-BA3D-BEF26BBC6D33}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{5DCE7EFD-525B-469A-BA3D-BEF26BBC6D33}.Release|Any CPU.Build.0 = Release|Any CPU
+		{18F645A1-1645-4885-9B53-AA048BE7EAF6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{18F645A1-1645-4885-9B53-AA048BE7EAF6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{18F645A1-1645-4885-9B53-AA048BE7EAF6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{18F645A1-1645-4885-9B53-AA048BE7EAF6}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -362,3 +362,5 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 /CSVAPI/people.db
+/CSVAPI/people.db-shm
+/CSVAPI/people.db-wal
