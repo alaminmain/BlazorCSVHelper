@@ -1,7 +1,11 @@
 using CSVAPI.Database;
 using CSVAPI.Entities;
+using CSVAPI.Extensions;
 using CSVAPI.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Logging;
+using Serilog.Core;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -13,6 +17,16 @@ builder.Services.AddSwaggerGen();
 // Add services to the container
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlite("Data Source=people.db")); // Or UseSqlServer for SQL Server
+
+builder.Services.AddStackExchangeRedisCache(options =>
+{
+    options.Configuration = "localhost:6379";
+    options.ConfigurationOptions = new StackExchange.Redis.ConfigurationOptions()
+    {
+        AbortOnConnectFail = true,
+        EndPoints = { options.Configuration }
+    };
+});
 var app = builder.Build();
 
 
@@ -20,7 +34,7 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    dbContext.Database.Migrate();
+   // dbContext.Database.Migrate();
     //if (!dbContext.Persons.Any())
     //{
     //    var mockData = MockDataGenerator.GenerateMockPersons(500000); // Generate 50 mock persons
@@ -45,20 +59,47 @@ var summaries = new[]
 };
 
 // Get all persons
-app.MapGet("/persons", async (ApplicationDbContext dbContext) =>
-    await dbContext.Persons.ToListAsync());
+app.MapGet("/persons", async (ApplicationDbContext dbContext, IDistributedCache cache) =>
+{
+    var cacheKey = "person";
+    //logger.LogInformation("fetching data for key: {CacheKey} from cache.", cacheKey);
+    
+
+    var persons = await cache.GetOrSetAsync(
+        cacheKey,
+        async () =>
+        {
+            //logger.LogInformation("cache miss. fetching data for key: {CacheKey} from database.", cacheKey);
+            return await dbContext.Persons.Take(10000).ToListAsync();
+        }
+        )!;
+    return Results.Ok(persons);
+});
+   // await dbContext.Persons.ToListAsync());
 
 // Get person by ID
-app.MapGet("/persons/{id}", async (int id, ApplicationDbContext dbContext) =>
-    await dbContext.Persons.FindAsync(id) is Person person
-        ? Results.Ok(person)
-        : Results.NotFound());
+app.MapGet("/persons/{id}", async (int id, ApplicationDbContext dbContext, IDistributedCache cache) =>
+{
+    var cacheKey = $"person:{id}";
+    var person = await cache.GetOrSetAsync(cacheKey,
+        async () => await dbContext.Persons.FindAsync(id),
+        new DistributedCacheEntryOptions()
+            .SetSlidingExpiration(TimeSpan.FromMinutes(30))
+            .SetAbsoluteExpiration(TimeSpan.FromHours(1)));
+    return person is not null ? Results.Ok(person) : Results.NotFound();
+});
+
 
 // Create a new person
-app.MapPost("/persons", async (Person person, ApplicationDbContext dbContext) =>
+app.MapPost("/persons", async (Person person, ApplicationDbContext dbContext, IDistributedCache cache) =>
 {
     dbContext.Persons.Add(person);
     await dbContext.SaveChangesAsync();
+    // invalidate cache for products, as new product is added
+    var cacheKey = "products";
+   
+    cache.Remove(cacheKey);
+
     return Results.Created($"/persons/{person.Id}", person);
 });
 
