@@ -1,3 +1,4 @@
+using BlazorCSVHelper.Client.APIService;
 using BlazorCSVHelper.Components;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -12,7 +13,7 @@ if (string.IsNullOrEmpty(baseAddress))
     throw new ArgumentNullException(nameof(baseAddress), "BaseAddress configuration is missing or empty.");
 }
 builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(baseAddress) });
-
+builder.Services.AddScoped<ApiService>();
 var app = builder.Build();
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

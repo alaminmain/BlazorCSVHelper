@@ -2,6 +2,7 @@ using CSVAPI.Database;
 using CSVAPI.Entities;
 using CSVAPI.Extensions;
 using CSVAPI.Services;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
@@ -58,24 +59,77 @@ var summaries = new[]
     "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
 };
 
-// Get all persons
-app.MapGet("/persons", async (ApplicationDbContext dbContext, IDistributedCache cache) =>
+app.MapGet("/persons", async (ApplicationDbContext dbContext, IDistributedCache cache,
+    [FromQuery] string? searchFields = null,
+    [FromQuery] string? searchValues = null,
+    [FromQuery] string? sortBy = null,
+    [FromQuery] string? sortDesc = null,
+    [FromQuery] int page = 1,
+    [FromQuery] int pageSize = 10) =>
 {
-    var cacheKey = "person";
-    //logger.LogInformation("fetching data for key: {CacheKey} from cache.", cacheKey);
-    
+    var searchFieldsList = searchFields?.Split(',').ToList();
+    var searchValuesList = searchValues?.Split(',').ToList();
+    var sortByList = sortBy?.Split(',').ToList();
+    var sortDescList = sortDesc?.Split(',').Select(bool.Parse).ToList();
 
+    var cacheKey = $"persons_{string.Join("_", searchFieldsList ?? new List<string>())}_{string.Join("_", searchValuesList ?? new List<string>())}_{string.Join("_", sortByList ?? new List<string>())}_{string.Join("_", sortDescList ?? new List<bool>())}_{page}_{pageSize}";
     var persons = await cache.GetOrSetAsync(
         cacheKey,
         async () =>
         {
-            //logger.LogInformation("cache miss. fetching data for key: {CacheKey} from database.", cacheKey);
-            return await dbContext.Persons.Take(10000).ToListAsync();
+            var query = dbContext.Persons.AsQueryable();
+
+            // Apply search filters
+            if (searchFieldsList != null && searchValuesList != null && searchFieldsList.Count == searchValuesList.Count)
+            {
+                for (int i = 0; i < searchFieldsList.Count; i++)
+                {
+                    var field = searchFieldsList[i];
+                    var value = searchValuesList[i];
+                    query = field switch
+                    {
+                        "FirstName" => query.Where(p => p.FirstName.Contains(value)),
+                        "LastName" => query.Where(p => p.LastName.Contains(value)),
+                        "Email" => query.Where(p => p.Email.Contains(value)),
+                        _ => query
+                    };
+                }
+            }
+
+            // Apply sorting
+            if (sortByList != null && sortDescList != null && sortByList.Count == sortDescList.Count)
+            {
+                for (int i = 0; i < sortByList.Count; i++)
+                {
+                    var field = sortByList[i];
+                    var desc = sortDescList[i];
+                    query = field switch
+                    {
+                        "FirstName" => desc ? query.OrderByDescending(p => p.FirstName) : query.OrderBy(p => p.FirstName),
+                        "LastName" => desc ? query.OrderByDescending(p => p.LastName) : query.OrderBy(p => p.LastName),
+                        "Email" => desc ? query.OrderByDescending(p => p.Email) : query.OrderBy(p => p.Email),
+                        _ => query
+                    };
+                }
+            }
+
+            // Apply pagination
+            var totalItems = await query.CountAsync();
+            var totalPages = (int)Math.Ceiling(totalItems / (double)pageSize);
+            var items = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+
+            //return items;
+            return new
+            {
+                TotalItems = totalItems,
+                TotalPages = totalPages,
+                Items = items
+            };
         }
-        )!;
+    )!;
+
     return Results.Ok(persons);
 });
-   // await dbContext.Persons.ToListAsync());
 
 // Get person by ID
 app.MapGet("/persons/{id}", async (int id, ApplicationDbContext dbContext, IDistributedCache cache) =>

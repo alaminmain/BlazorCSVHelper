@@ -10,6 +10,7 @@
     <ProjectReference Include="..\BlazorCSVHelper.Client\BlazorCSVHelper.Client.csproj" />
     <ProjectReference Include="..\BlazorCSVHelper.Shared\BlazorCSVHelper.Shared.csproj" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="8.0.11" />
+    <PackageReference Include="Refit.HttpClientFactory" Version="8.0.0" />
   </ItemGroup>
 
 </Project>
