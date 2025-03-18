@@ -1,8 +1,7 @@
 ﻿@page "/personlist"
 
-
 @inject ApiService ApiService
-@using System.Net.Http.Json
+@inject IJSRuntime JsRuntime
 @using BlazorCSVHelper.Client.APIService
 @using BlazorCSVHelper.Shared.DTOs
 @using System.Text
@@ -10,8 +9,7 @@
 <h3>Person List</h3>
 
 <div>
-    <input @bind="searchFields" placeholder="Search Fields (comma separated)" />
-    <input @bind="searchValues" placeholder="Search Values (comma separated)" />
+    <input @bind="search" placeholder="Search..." />
     <button @onclick="Search">Search</button>
 </div>
 
@@ -46,7 +44,7 @@
         </tr>
     </thead>
     <tbody>
-        @if (people != null)
+        @if (people != null && people.Items?.Any() == true)
         {
             @foreach (var person in people.Items)
             {
@@ -61,44 +59,43 @@
                 </tr>
             }
         }
+        else
+        {
+            <tr><td colspan="7">No records found.</td></tr>
+        }
     </tbody>
 </table>
 
 <div>
     <button @onclick="PreviousPage" disabled="@(!canPrevious)">Previous</button>
+    <span>Page @currentPage of @people?.TotalPages</span>
     <button @onclick="NextPage" disabled="@(!canNext)">Next</button>
 </div>
 
 @code {
-    private PagedResult<Person> people;
-    private string searchFields = string.Empty;
-    private string searchValues = string.Empty;
+    private PagedResult<Person> people = new();
+    private string search = string.Empty;
     private string sortBy = "FirstName";
     private bool sortDesc = false;
-    private int page = 1;
+    private int currentPage = 1;
     private int pageSize = 10;
-    private bool canPrevious => page > 1;
-    private bool canNext => people != null && people.TotalPages == pageSize;
+
+    private bool canPrevious => currentPage > 1;
+    private bool canNext => people != null && currentPage < people.TotalPages;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadData();
     }
 
-    // private async Task LoadData()
-    // {
-    //     var query = $"https://localhost:7029/persons?searchFields={searchFields}&searchValues={searchValues}&sortBy={sortBy}&sortDesc={sortDesc}&page={page}&pageSize={pageSize}";
-    //     var response = await Http.GetFromJsonAsync<ApiResponse>(query);
-    //     people = response;
-    // }
-
     private async Task LoadData()
     {
-        people = await ApiService.GetPersonsAsync(1, 100);
+        people = await ApiService.GetPersonsAsync(currentPage, pageSize, search, sortBy, sortDesc);
     }
+
     private async Task Search()
     {
-        page = 1;
+        currentPage = 1;
         await LoadData();
     }
 
@@ -106,7 +103,7 @@
     {
         if (canPrevious)
         {
-            page--;
+            currentPage--;
             await LoadData();
         }
     }
@@ -115,18 +112,20 @@
     {
         if (canNext)
         {
-            page++;
+            currentPage++;
             await LoadData();
         }
     }
 
     private async Task DownloadCsv()
     {
-        var csvContent = CreateCsv(people.Items);
-        var bytes = System.Text.Encoding.UTF8.GetBytes(csvContent);
-        var base64 = Convert.ToBase64String(bytes);
+        if (people?.Items == null || !people.Items.Any())
+            return;
 
-        var url = "data:text/csv;base64," + base64;
+        var csvContent = CreateCsv(people.Items);
+        var bytes = Encoding.UTF8.GetBytes(csvContent);
+        var base64 = Convert.ToBase64String(bytes);
+        var url = $"data:text/csv;base64,{base64}";
         await JsRuntime.InvokeVoidAsync("downloadFile", url, "people.csv");
     }
 
@@ -142,15 +141,5 @@
         }
 
         return csvBuilder.ToString();
-    }
-
-    [Inject]
-    private IJSRuntime JsRuntime { get; set; } = default!;
-
-    private class ApiResponse<T>
-    {
-        public List<T> Items { get; set; } = new();
-        public int TotalItems { get; set; }
-        public int TotalPages { get; set; }
     }
 }

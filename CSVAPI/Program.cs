@@ -28,6 +28,17 @@ builder.Services.AddStackExchangeRedisCache(options =>
         EndPoints = { options.Configuration }
     };
 });
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowBlazorClient",
+        policy =>
+        {
+            policy.WithOrigins("https://localhost:7169")
+                  .AllowAnyHeader()
+                  .AllowAnyMethod();
+        });
+});
 var app = builder.Build();
 
 
@@ -51,7 +62,8 @@ if (app.Environment.IsDevelopment())
 
 
 }
-
+// ?? Use CORS before any endpoints
+app.UseCors("AllowBlazorClient");
 app.UseHttpsRedirection();
 
 var summaries = new[]
@@ -59,74 +71,60 @@ var summaries = new[]
     "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
 };
 
-app.MapGet("/persons", async (ApplicationDbContext dbContext, IDistributedCache cache,
-    [FromQuery] string? searchFields = null,
-    [FromQuery] string? searchValues = null,
+app.MapGet("/persons", async (
+    ApplicationDbContext dbContext,
+    IDistributedCache cache,
+    [FromQuery] string? search = null,
     [FromQuery] string? sortBy = null,
-    [FromQuery] string? sortDesc = null,
+    [FromQuery] bool sortDesc = false,
     [FromQuery] int page = 1,
     [FromQuery] int pageSize = 10) =>
 {
-    var searchFieldsList = searchFields?.Split(',').ToList();
-    var searchValuesList = searchValues?.Split(',').ToList();
-    var sortByList = sortBy?.Split(',').ToList();
-    var sortDescList = sortDesc?.Split(',').Select(bool.Parse).ToList();
+    var cacheKey = $"persons_{search}_{sortBy}_{sortDesc}_{page}_{pageSize}";
 
-    var cacheKey = $"persons_{string.Join("_", searchFieldsList ?? new List<string>())}_{string.Join("_", searchValuesList ?? new List<string>())}_{string.Join("_", sortByList ?? new List<string>())}_{string.Join("_", sortDescList ?? new List<bool>())}_{page}_{pageSize}";
     var persons = await cache.GetOrSetAsync(
         cacheKey,
         async () =>
         {
             var query = dbContext.Persons.AsQueryable();
 
-            // Apply search filters
-            if (searchFieldsList != null && searchValuesList != null && searchFieldsList.Count == searchValuesList.Count)
+            // ? Global Search
+            if (!string.IsNullOrWhiteSpace(search))
             {
-                for (int i = 0; i < searchFieldsList.Count; i++)
-                {
-                    var field = searchFieldsList[i];
-                    var value = searchValuesList[i];
-                    query = field switch
-                    {
-                        "FirstName" => query.Where(p => p.FirstName.Contains(value)),
-                        "LastName" => query.Where(p => p.LastName.Contains(value)),
-                        "Email" => query.Where(p => p.Email.Contains(value)),
-                        _ => query
-                    };
-                }
+                string keyword = search.Trim();
+                query = query.Where(p =>
+                    p.FirstName.Contains(keyword) ||
+                    p.LastName.Contains(keyword) ||
+                    p.Email.Contains(keyword)
+                );
             }
 
-            // Apply sorting
-            if (sortByList != null && sortDescList != null && sortByList.Count == sortDescList.Count)
+            // ? Sorting
+            if (!string.IsNullOrWhiteSpace(sortBy))
             {
-                for (int i = 0; i < sortByList.Count; i++)
+                query = sortBy switch
                 {
-                    var field = sortByList[i];
-                    var desc = sortDescList[i];
-                    query = field switch
-                    {
-                        "FirstName" => desc ? query.OrderByDescending(p => p.FirstName) : query.OrderBy(p => p.FirstName),
-                        "LastName" => desc ? query.OrderByDescending(p => p.LastName) : query.OrderBy(p => p.LastName),
-                        "Email" => desc ? query.OrderByDescending(p => p.Email) : query.OrderBy(p => p.Email),
-                        _ => query
-                    };
-                }
+                    "FirstName" => sortDesc ? query.OrderByDescending(p => p.FirstName) : query.OrderBy(p => p.FirstName),
+                    "LastName" => sortDesc ? query.OrderByDescending(p => p.LastName) : query.OrderBy(p => p.LastName),
+                    "Email" => sortDesc ? query.OrderByDescending(p => p.Email) : query.OrderBy(p => p.Email),
+                    _ => query
+                };
             }
 
-            // Apply pagination
+            // ? Pagination
             var totalItems = await query.CountAsync();
             var totalPages = (int)Math.Ceiling(totalItems / (double)pageSize);
             var items = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
 
-            //return items;
             return new
             {
                 TotalItems = totalItems,
                 TotalPages = totalPages,
+                Page = page,
+                PageSize = pageSize,
                 Items = items
             };
-        }
-    )!;
+        });
 
     return Results.Ok(persons);
 });
